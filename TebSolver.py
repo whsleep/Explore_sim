@@ -4,9 +4,9 @@ import numpy as np
 class TebplanSolver:
     """局部规划求解器（支持障碍约束自适应、轨迹点数量自动调整）"""
     
-    def __init__(self, x0, xf, obstacles=None, n=None, safe_distance=0.8, 
-                 v_max=1.0, omega_max=2.0, r_min=0.5, a_max=1.0, epsilon=1e-2,
-                 w_p=0.5, w_t=1.0, w_kin=1.0, w_r=0.0, w_obs=10.0, T_min=0.05, T_max=0.2):
+    def __init__(self, x0, xf, obstacles=None, n=None, safe_distance=0.50, 
+                 v_max=1.0, omega_max=2.0, r_min=0.5, a_max=1.5, epsilon=1e-2,
+                 w_p=0.5, w_t=1.0, w_kin=2.0, w_r=0.0, w_obs=10.0, T_min=0.05, T_max=0.3):
         """
         初始化路径规划求解器
         
@@ -19,7 +19,7 @@ class TebplanSolver:
         """
         self.x0 = np.array(x0)
         self.xf = np.array(xf)
-        self.obstacles = obstacles
+        self.obstacles = np.array(obstacles)
         self.safe_distance = safe_distance
         self.v_max = v_max
         self.omega_max = omega_max
@@ -36,7 +36,7 @@ class TebplanSolver:
         
         # 自动计算轨迹点数量n（若未指定）
         self.n = self._auto_calculate_n() if n is None else n
-        self.n = max(10, self.n)  # 确保最少5个中间点
+        self.n = max(5, self.n)  # 确保最少5个中间点
         
         # 求解结果
         self.trajectory = None
@@ -113,6 +113,7 @@ class TebplanSolver:
             dx = x[i+1] - x[i]
             dy = y[i+1] - y[i]
             f += self.w_p * (dx**2 + dy**2)  # 路径平滑性
+            f += self.w_p * (theta[i+1] - theta[i])**2  # 姿态平滑性
             f += self.w_t * dt[i]**2          # 时间惩罚
         
         # 约束条件
@@ -125,15 +126,31 @@ class TebplanSolver:
             x[-1] - self.xf[0],   y[-1] - self.xf[1],   theta[-1] - self.xf[2]
         ])
         
-        # 2. 避障约束（所有轨迹点，包括起点和终点；无障碍时自动忽略）
-        if obs_now is not None and np.asanyarray(obs_now).size > 0:
-            for i in range(self.n + 2):  # 遍历所有轨迹点（0到n+1）
-                for (ox, oy) in obs_now:
-                    # 计算轨迹点到障碍物的距离
-                    dist = ca.sqrt((x[i] - ox)**2 + (y[i] - oy)** 2)
-                    # 约束：距离 >= 安全距离（即安全距离 - 距离 <= 0）
-                    # g_ineq.append(self.safe_distance - dist)
-                    f += self.w_obs*ca.fmax(0, self.safe_distance - dist)**2
+        # 2. 避障约束 (椭圆模型)
+        if len(obs_now) > 0:
+            for i in range(self.n + 2):
+                for obs in obs_now:
+                    # 解包预处理好的 7 个参数
+                    obs_x, obs_y, obs_a, obs_b, _, cos_ot, sin_ot = obs
+                    
+                    # 1. 平移
+                    dx = x[i] - obs_x
+                    dy = y[i] - obs_y
+                    
+                    # 2. 旋转到椭圆局部坐标系 (直接使用传入的常量)
+                    # 相比 ca.cos(obs_theta)，这里只是简单的乘法和加法
+                    x_rel = dx * cos_ot + dy * sin_ot
+                    y_rel = -dx * sin_ot + dy * cos_ot
+                    
+                    # 3. 计算安全边界
+                    a_safe = obs_a + self.safe_distance
+                    b_safe = obs_b + self.safe_distance
+                    
+                    # 4. 椭圆判定方程
+                    ellipse_val = (x_rel / a_safe)**2 + (y_rel / b_safe)**2
+                    
+                    # 5. 惩罚项
+                    f += self.w_obs * ca.exp(10.0 * (1.0 - ellipse_val))
         
         # 3. 运动学约束（速度、角速度、加速度、转弯半径）
         for i in range(self.n + 1):

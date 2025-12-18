@@ -8,7 +8,7 @@ pip install -r requirements.txt
 
 ### ir-sim自主建图
 ```
-python3 grid_map.py
+python3 run.py
 ```
 
 ![](./animation/animation.gif)
