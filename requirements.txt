@@ -1,0 +1,6 @@
+ir-sim==2.8.1
+numba==0.63.1
+numpy>=1.22.0  
+pynput==1.8.1
+casadi==3.7.0
+scikit-learn==1.6.1

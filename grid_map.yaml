@@ -1,0 +1,46 @@
+world:
+  height: 10  # the height of the world
+  width: 10   # the width of the world
+  step_time: 0.1  # 10Hz calculate each step
+  sample_time: 0.1  # 10 Hz for render and data extraction 
+  offset: [0, 0] # the offset of the world on x and y 
+  collision_mode: 'stop'  # 'stop', 'unobstructed',  
+  control_mode: 'auto'  # 'keyboard', 'auto'
+  obstacle_map: 'eval_exploration_7.png'
+  mdownsample: 2
+
+gui:
+  keyboard:
+    backend: 'pynput'      # 'pynput' (default) or 'mpl'
+    global_hook: true      # capture keys globally (may require OS permissions)
+    key_id: 0              # initial robot control id
+    key_lv_max: 0.8      # maximum linear velocity
+    key_ang_max: 3.0     # maximum angular velocity
+    key_lv: 0.0          # initial linear velocity
+    key_ang: 0.0         # initial angular velocity
+
+robot:
+  - kinematics: {name: 'diff'}  # omni, diff, acker
+    shape: {name: 'rectangle', length: 0.4, width: 0.2, wheelbase: 0.2}
+    state: [1, 1, 0]
+    goal: [40, 40, 0]
+    vel_max: [1.5, 3.0]  
+    accl_max: [3.0, 3.0]  
+    plot:
+      show_trail: False
+      traj_color: 'g'
+      show_trajectory: True
+      show_goal: False
+
+    sensors: 
+      - type: 'lidar2d'
+        range_min: 0
+        range_max: 3
+        angle_range: 6.28
+        number: 50
+        noise: False
+        std: 1   
+        angle_std: 0.2
+        offset: [0, 0, 0]
+        alpha: 0.4
+
